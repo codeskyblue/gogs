@@ -100,9 +100,49 @@ func SearchRepos(ctx *middleware.Context) {
 	})
 }
 
+// https://github.com/gogits/go-gogs-client/wiki/Repositories#list-your-repositories
+func ListMyRepos(ctx *middleware.Context) {
+	ownRepos, err := models.GetRepositories(ctx.User.Id, true)
+	if err != nil {
+		ctx.JSON(500, &base.ApiJsonErr{"GetRepositories: " + err.Error(), base.DOC_URL})
+		return
+	}
+	numOwnRepos := len(ownRepos)
+
+	accessibleRepos, err := ctx.User.GetAccessibleRepositories()
+	if err != nil {
+		ctx.JSON(500, &base.ApiJsonErr{"GetAccessibleRepositories: " + err.Error(), base.DOC_URL})
+		return
+	}
+
+	repos := make([]*api.Repository, numOwnRepos+len(accessibleRepos))
+	for i := range ownRepos {
+		repos[i] = ToApiRepository(ctx.User, ownRepos[i], api.Permission{true, true, true})
+	}
+	i := numOwnRepos
+
+	for repo, access := range accessibleRepos {
+		repos[i] = ToApiRepository(repo.Owner, repo, api.Permission{
+			Admin: access >= models.ACCESS_MODE_ADMIN,
+			Push:  access >= models.ACCESS_MODE_WRITE,
+			Pull:  true,
+		})
+		i++
+	}
+
+	ctx.JSON(200, &repos)
+}
+
 func createRepo(ctx *middleware.Context, owner *models.User, opt api.CreateRepoOption) {
-	repo, err := models.CreateRepository(owner, opt.Name, opt.Description,
-		opt.Gitignore, opt.License, opt.Private, false, opt.AutoInit)
+	repo, err := models.CreateRepository(owner, models.CreateRepoOptions{
+		Name:        opt.Name,
+		Description: opt.Description,
+		Gitignores:  opt.Gitignores,
+		License:     opt.License,
+		Readme:      opt.Readme,
+		IsPrivate:   opt.Private,
+		AutoInit:    opt.AutoInit,
+	})
 	if err != nil {
 		if models.IsErrRepoAlreadyExist(err) ||
 			models.IsErrNameReserved(err) ||
@@ -111,7 +151,7 @@ func createRepo(ctx *middleware.Context, owner *models.User, opt api.CreateRepoO
 		} else {
 			log.Error(4, "CreateRepository: %v", err)
 			if repo != nil {
-				if err = models.DeleteRepository(ctx.User.Id, repo.ID, ctx.User.Name); err != nil {
+				if err = models.DeleteRepository(ctx.User.Id, repo.ID); err != nil {
 					log.Error(4, "DeleteRepository: %v", err)
 				}
 			}
@@ -120,11 +160,10 @@ func createRepo(ctx *middleware.Context, owner *models.User, opt api.CreateRepoO
 		return
 	}
 
-	ctx.JSON(200, ToApiRepository(owner, repo, api.Permission{true, true, true}))
+	ctx.JSON(201, ToApiRepository(owner, repo, api.Permission{true, true, true}))
 }
 
-// POST /user/repos
-// https://developer.github.com/v3/repos/#create
+// https://github.com/gogits/go-gogs-client/wiki/Repositories#create
 func CreateRepo(ctx *middleware.Context, opt api.CreateRepoOption) {
 	// Shouldn't reach this condition, but just in case.
 	if ctx.User.IsOrganization() {
@@ -134,8 +173,6 @@ func CreateRepo(ctx *middleware.Context, opt api.CreateRepoOption) {
 	createRepo(ctx, ctx.User, opt)
 }
 
-// POST /orgs/:org/repos
-// https://developer.github.com/v3/repos/#create
 func CreateOrgRepo(ctx *middleware.Context, opt api.CreateRepoOption) {
 	org, err := models.GetOrgByName(ctx.Params(":org"))
 	if err != nil {
@@ -155,23 +192,9 @@ func CreateOrgRepo(ctx *middleware.Context, opt api.CreateRepoOption) {
 }
 
 func MigrateRepo(ctx *middleware.Context, form auth.MigrateRepoForm) {
-	u, err := models.GetUserByName(ctx.Query("username"))
-	if err != nil {
-		if models.IsErrUserNotExist(err) {
-			ctx.HandleAPI(422, err)
-		} else {
-			ctx.HandleAPI(500, err)
-		}
-		return
-	}
-	if !u.ValidatePassword(ctx.Query("password")) {
-		ctx.HandleAPI(422, "Username or password is not correct.")
-		return
-	}
-
-	ctxUser := u
+	ctxUser := ctx.User
 	// Not equal means current user is an organization.
-	if form.Uid != u.Id {
+	if form.Uid != ctxUser.Id {
 		org, err := models.GetUserByID(form.Uid)
 		if err != nil {
 			if models.IsErrUserNotExist(err) {
@@ -191,7 +214,7 @@ func MigrateRepo(ctx *middleware.Context, form auth.MigrateRepoForm) {
 
 	if ctxUser.IsOrganization() {
 		// Check ownership of organization.
-		if !ctxUser.IsOwnedBy(u.Id) {
+		if !ctxUser.IsOwnedBy(ctx.User.Id) {
 			ctx.HandleAPI(403, "Given user is not owner of organization.")
 			return
 		}
@@ -219,7 +242,7 @@ func MigrateRepo(ctx *middleware.Context, form auth.MigrateRepoForm) {
 	repo, err := models.MigrateRepository(ctxUser, form.RepoName, form.Description, form.Private, form.Mirror, remoteAddr)
 	if err != nil {
 		if repo != nil {
-			if errDelete := models.DeleteRepository(ctxUser.Id, repo.ID, ctxUser.Name); errDelete != nil {
+			if errDelete := models.DeleteRepository(ctxUser.Id, repo.ID); errDelete != nil {
 				log.Error(4, "DeleteRepository: %v", errDelete)
 			}
 		}
@@ -228,45 +251,5 @@ func MigrateRepo(ctx *middleware.Context, form auth.MigrateRepoForm) {
 	}
 
 	log.Trace("Repository migrated: %s/%s", ctxUser.Name, form.RepoName)
-	ctx.WriteHeader(200)
-}
-
-// GET /user/repos
-// https://developer.github.com/v3/repos/#list-your-repositories
-func ListMyRepos(ctx *middleware.Context) {
-	ownRepos, err := models.GetRepositories(ctx.User.Id, true)
-	if err != nil {
-		ctx.JSON(500, &base.ApiJsonErr{"GetRepositories: " + err.Error(), base.DOC_URL})
-		return
-	}
-	numOwnRepos := len(ownRepos)
-
-	accessibleRepos, err := ctx.User.GetAccessibleRepositories()
-	if err != nil {
-		ctx.JSON(500, &base.ApiJsonErr{"GetAccessibleRepositories: " + err.Error(), base.DOC_URL})
-		return
-	}
-
-	repos := make([]*api.Repository, numOwnRepos+len(accessibleRepos))
-	for i := range ownRepos {
-		repos[i] = ToApiRepository(ctx.User, ownRepos[i], api.Permission{true, true, true})
-	}
-	i := numOwnRepos
-
-	for repo, access := range accessibleRepos {
-		if err = repo.GetOwner(); err != nil {
-			ctx.JSON(500, &base.ApiJsonErr{"GetOwner: " + err.Error(), base.DOC_URL})
-			return
-		}
-
-		repos[i] = ToApiRepository(repo.Owner, repo, api.Permission{false, access >= models.ACCESS_MODE_WRITE, true})
-
-		// FIXME: cache result to reduce DB query?
-		if repo.Owner.IsOrganization() && repo.Owner.IsOwnedBy(ctx.User.Id) {
-			repos[i].Permissions.Admin = true
-		}
-		i++
-	}
-
-	ctx.JSON(200, &repos)
+	ctx.JSON(201, ToApiRepository(ctxUser, repo, api.Permission{true, true, true}))
 }

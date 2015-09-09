@@ -1,27 +1,34 @@
 'use strict';
 
 var csrf;
+var suburl;
+
+function initCommentPreviewTab($form) {
+    var $tab_menu = $form.find('.tabular.menu');
+    $tab_menu.find('.item').tab();
+    $tab_menu.find('.item[data-tab="' + $tab_menu.data('preview') + '"]').click(function () {
+        var $this = $(this);
+        $.post($this.data('url'), {
+                "_csrf": csrf,
+                "mode": "gfm",
+                "context": $this.data('context'),
+                "text": $form.find('.tab.segment[data-tab="' + $tab_menu.data('write') + '"] textarea').val()
+            },
+            function (data) {
+                var $preview_tab = $form.find('.tab.segment[data-tab="' + $tab_menu.data('preview') + '"]');
+                $preview_tab.html(data);
+                emojify.run($preview_tab[0]);
+            }
+        );
+    });
+}
 
 function initCommentForm() {
     if ($('.comment.form').length == 0) {
         return
     }
 
-    var $form = $('.comment.form');
-    $form.find('.tabular.menu .item').tab();
-    $form.find('.tabular.menu .item[data-tab="preview"]').click(function () {
-        var $this = $(this);
-        $.post($this.data('url'), {
-                "_csrf": csrf,
-                "mode": "gfm",
-                "context": $this.data('context'),
-                "text": $form.find('.tab.segment[data-tab="write"] textarea').val()
-            },
-            function (data) {
-                $form.find('.tab.segment[data-tab="preview"]').html(data);
-            }
-        );
-    });
+    initCommentPreviewTab($('.comment.form'));
 
     // Labels
     var $list = $('.ui.labels.list');
@@ -39,14 +46,14 @@ function initCommentForm() {
 
     $label_menu.find('.item:not(.no-select)').click(function () {
         if ($(this).hasClass('checked')) {
-            $(this).removeClass('checked')
-            $(this).find('.octicon').removeClass('octicon-check')
+            $(this).removeClass('checked');
+            $(this).find('.octicon').removeClass('octicon-check');
             if (has_label_update_action) {
                 updateIssueMeta($label_menu.data('update-url'), "detach", $(this).data('id'));
             }
         } else {
-            $(this).addClass('checked')
-            $(this).find('.octicon').addClass('octicon-check')
+            $(this).addClass('checked');
+            $(this).find('.octicon').addClass('octicon-check');
             if (has_label_update_action) {
                 updateIssueMeta($label_menu.data('update-url'), "attach", $(this).data('id'));
             }
@@ -88,7 +95,7 @@ function initCommentForm() {
 
     function selectItem(select_id, input_id) {
         var $menu = $(select_id + ' .menu');
-        var $list = $('.ui' + select_id + '.list')
+        var $list = $('.ui' + select_id + '.list');
         var has_update_action = $menu.data('action') == 'update';
 
         $menu.find('.item:not(.no-select)').click(function () {
@@ -141,7 +148,7 @@ function initInstall() {
     // Database type change detection.
     $("#db_type").change(function () {
         var db_type = $('#db_type').val();
-        if (db_type === "SQLite3") {
+        if (db_type === "SQLite3" || db_type === "TiDB") {
             $('#sql_settings').hide();
             $('#pgsql_settings').hide();
             $('#sqlite_settings').show();
@@ -165,11 +172,29 @@ function initInstall() {
             }
         }
     });
-};
+
+    $('#offline-mode input').change(function () {
+        if ($(this).is(':checked')) {
+            $('#disable-gravatar').checkbox('check');
+        }
+    });
+}
 
 function initRepository() {
     if ($('.repository').length == 0) {
         return;
+    }
+
+    // Options
+    if ($('.repository.settings.options').length > 0) {
+        $('#repo_name').keyup(function () {
+            var $prompt_span = $('#repo-name-change-prompt');
+            if ($(this).val().toString().toLowerCase() != $(this).data('repo-name').toString().toLowerCase()) {
+                $prompt_span.show();
+            } else {
+                $prompt_span.hide();
+            }
+        });
     }
 
     // Labels
@@ -187,7 +212,7 @@ function initRepository() {
             $(this).minicolors();
         });
         $('.precolors .color').click(function () {
-            var color_hex = $(this).data('color-hex')
+            var color_hex = $(this).data('color-hex');
             $('.color-picker').val(color_hex);
             $('.minicolors-swatch-color').css("background-color", color_hex);
         });
@@ -209,7 +234,7 @@ function initRepository() {
 
     }
     if ($('.repository.new.milestone').length > 0) {
-        var $datepicker = $('.milestone.datepicker')
+        var $datepicker = $('.milestone.datepicker');
         $datepicker.datetimepicker({
             lang: $datepicker.data('lang'),
             inline: true,
@@ -226,15 +251,102 @@ function initRepository() {
         });
     }
 
-    // Settings
-    if ($('.repository.settings').length > 0) {
-        $('#add-deploy-key').click(function () {
-            $('#add-deploy-key-panel').show();
-        });
-    }
-
     // Issues
     if ($('.repository.view.issue').length > 0) {
+        // Edit issue title
+        var $issue_title = $('#issue-title');
+        var $edit_input = $('#edit-title-input input');
+        var editTitleToggle = function () {
+            $issue_title.toggle();
+            $('.not-in-edit').toggle();
+            $('#edit-title-input').toggle();
+            $('.in-edit').toggle();
+            $edit_input.focus();
+            return false;
+        };
+        $('#edit-title').click(editTitleToggle);
+        $('#cancel-edit-title').click(editTitleToggle);
+        $('#save-edit-title').click(editTitleToggle).
+            click(function () {
+                if ($edit_input.val().length == 0 ||
+                    $edit_input.val() == $issue_title.text()) {
+                    $edit_input.val($issue_title.text());
+                    return false;
+                }
+
+                $.post($(this).data('update-url'), {
+                        "_csrf": csrf,
+                        "title": $edit_input.val()
+                    },
+                    function (data) {
+                        $edit_input.val(data.title);
+                        $issue_title.text(data.title);
+                    });
+                return false;
+            });
+
+        // Edit issue or comment content
+        $('.edit-content').click(function () {
+            var $segment = $(this).parent().parent().next();
+            var $edit_content_zone = $segment.find('.edit-content-zone');
+            var $render_content = $segment.find('.render-content');
+            var $raw_content = $segment.find('.raw-content');
+            var $textarea;
+
+            // Setup new form
+            if ($edit_content_zone.html().length == 0) {
+                $edit_content_zone.html($('#edit-content-form').html());
+                $textarea = $segment.find('textarea');
+
+                // Give new write/preview data-tab name to distinguish from others
+                var $edit_content_form = $edit_content_zone.find('.ui.comment.form');
+                var $tabular_menu = $edit_content_form.find('.tabular.menu');
+                $tabular_menu.attr('data-write', $edit_content_zone.data('write'));
+                $tabular_menu.attr('data-preview', $edit_content_zone.data('preview'));
+                $tabular_menu.find('.write.item').attr('data-tab', $edit_content_zone.data('write'));
+                $tabular_menu.find('.preview.item').attr('data-tab', $edit_content_zone.data('preview'));
+                $edit_content_form.find('.write.segment').attr('data-tab', $edit_content_zone.data('write'));
+                $edit_content_form.find('.preview.segment').attr('data-tab', $edit_content_zone.data('preview'));
+
+                initCommentPreviewTab($edit_content_form);
+
+                $edit_content_zone.find('.cancel.button').click(function () {
+                    $render_content.show();
+                    $edit_content_zone.hide();
+                });
+                $edit_content_zone.find('.save.button').click(function () {
+                    $render_content.show();
+                    $edit_content_zone.hide();
+
+                    $.post($edit_content_zone.data('update-url'), {
+                            "_csrf": csrf,
+                            "content": $textarea.val(),
+                            "context": $edit_content_zone.data('context')
+                        },
+                        function (data) {
+                            if (data.length == 0) {
+                                $render_content.html($('#no-content').html());
+                            } else {
+                                $render_content.html(data.content);
+                                emojify.run($render_content[0]);
+                            }
+                        });
+                });
+            } else {
+                $textarea = $segment.find('textarea');
+            }
+
+            // Show write/preview tab and copy raw content as needed
+            $edit_content_zone.show();
+            $render_content.hide();
+            if ($textarea.val().length == 0) {
+                $textarea.val($raw_content.text());
+            }
+            $textarea.focus();
+            return false;
+        });
+
+        // Change status
         var $status_btn = $('#status-button');
         $('#content').keyup(function () {
             if ($(this).val().length == 0) {
@@ -249,9 +361,24 @@ function initRepository() {
         })
     }
 
+    // Diff
+    if ($('.repository.diff').length > 0) {
+        var $counter = $('.diff-counter');
+        if ($counter.length < 1) {
+            return;
+        }
+        $counter.each(function (i, item) {
+            var $item = $(item);
+            var addLine = $item.find('span[data-line].add').data("line");
+            var delLine = $item.find('span[data-line].del').data("line");
+            var addPercent = parseFloat(addLine) / (parseFloat(addLine) + parseFloat(delLine)) * 100;
+            $item.find(".bar .add").css("width", addPercent + "%");
+        });
+    }
+
     // Pull request
     if ($('.repository.compare.pull').length > 0) {
-        var $branch_dropdown = $('.choose.branch .dropdown')
+        var $branch_dropdown = $('.choose.branch .dropdown');
         $branch_dropdown.dropdown({
             fullTextSearch: true,
             onChange: function (text, value, $choice) {
@@ -260,10 +387,64 @@ function initRepository() {
             message: {noResults: $branch_dropdown.data('no-results')}
         });
     }
-};
+}
+
+function initOrganization() {
+    if ($('.organization').length == 0) {
+        return;
+    }
+
+    // Options
+    if ($('.organization.settings.options').length > 0) {
+        $('#org_name').keyup(function () {
+            var $prompt_span = $('#org-name-change-prompt');
+            if ($(this).val().toString().toLowerCase() != $(this).data('org-name').toString().toLowerCase()) {
+                $prompt_span.show();
+            } else {
+                $prompt_span.hide();
+            }
+        });
+    }
+}
+
+function initUser() {
+    if ($('.user').length == 0) {
+        return;
+    }
+
+    // Options
+    if ($('.user.settings.profile').length > 0) {
+        $('#username').keyup(function () {
+            var $prompt_span = $('#name-change-prompt');
+            if ($(this).val().toString().toLowerCase() != $(this).data('name').toString().toLowerCase()) {
+                $prompt_span.show();
+            } else {
+                $prompt_span.hide();
+            }
+        });
+    }
+}
+
+function initWebhook() {
+    if ($('.new.webhook').length == 0) {
+        return;
+    }
+
+    $('.events.checkbox input').change(function () {
+        if ($(this).is(':checked')) {
+            $('.events.fields').show();
+        }
+    });
+    $('.non-events.checkbox input').change(function () {
+        if ($(this).is(':checked')) {
+            $('.events.fields').hide();
+        }
+    });
+}
 
 $(document).ready(function () {
     csrf = $('meta[name=_csrf]').attr("content");
+    suburl = $('meta[name=_suburl]').attr("content");
 
     // Show exact time
     $('.time-since').each(function () {
@@ -297,6 +478,16 @@ $(document).ready(function () {
             }
         }
     });
+    $('.tabular.menu .item').tab();
+
+    $('.toggle.button').click(function () {
+        $($(this).data('target')).slideToggle(100);
+    });
+
+    // Highlight JS
+    if (typeof hljs != 'undefined') {
+        hljs.initHighlightingOnLoad();
+    }
 
     // Dropzone
     if ($('#dropzone').length > 0) {
@@ -320,7 +511,7 @@ $(document).ready(function () {
                 this.on("success", function (file, data) {
                     filenameDict[file.name] = data.uuid;
                     $('.attachments').append('<input id="' + data.uuid + '" name="attachments" type="hidden" value="' + data.uuid + '">');
-                })
+                });
                 this.on("removedfile", function (file) {
                     if (file.name in filenameDict) {
                         $('#' + filenameDict[file.name]).remove();
@@ -330,12 +521,25 @@ $(document).ready(function () {
         });
     }
 
+    // Emojify
+    emojify.setConfig({
+        img_dir: suburl + '/img/emoji'
+    });
+    $('.emojify').each(function () {
+        emojify.run($(this)[0]);
+    });
+
     // Helpers.
     $('.delete-button').click(function () {
         var $this = $(this);
         $('.delete.modal').modal({
             closable: false,
             onApprove: function () {
+                if ($this.data('type') == "form") {
+                    $($this.data('form')).submit();
+                    return;
+                }
+
                 $.post($this.data('url'), {
                     "_csrf": csrf,
                     "id": $this.data("id")
@@ -346,8 +550,17 @@ $(document).ready(function () {
         }).modal('show');
         return false;
     });
+    $('.show-panel.button').click(function () {
+        $($(this).data('panel')).show();
+    });
+    $('.show-modal.button').click(function () {
+        $($(this).data('modal')).modal('show');
+    });
 
     initCommentForm();
     initInstall();
     initRepository();
+    initOrganization();
+    initUser();
+    initWebhook();
 });

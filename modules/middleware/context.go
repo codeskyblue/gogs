@@ -26,6 +26,27 @@ import (
 	"github.com/gogits/gogs/modules/setting"
 )
 
+type RepoContext struct {
+	AccessMode   models.AccessMode
+	IsWatching   bool
+	IsBranch     bool
+	IsTag        bool
+	IsCommit     bool
+	Repository   *models.Repository
+	Owner        *models.User
+	Commit       *git.Commit
+	Tag          *git.Tag
+	GitRepo      *git.Repository
+	BranchName   string
+	TagName      string
+	TreeName     string
+	CommitID     string
+	RepoLink     string
+	CloneLink    models.CloneLink
+	CommitsCount int
+	Mirror       *models.Mirror
+}
+
 // Context represents context of a request.
 type Context struct {
 	*macaron.Context
@@ -49,27 +70,6 @@ type Context struct {
 
 		Team *models.Team
 	}
-}
-
-type RepoContext struct {
-	AccessMode   models.AccessMode
-	IsWatching   bool
-	IsBranch     bool
-	IsTag        bool
-	IsCommit     bool
-	Repository   *models.Repository
-	Owner        *models.User
-	Commit       *git.Commit
-	Tag          *git.Tag
-	GitRepo      *git.Repository
-	BranchName   string
-	TagName      string
-	TreeName     string
-	CommitId     string
-	RepoLink     string
-	CloneLink    models.CloneLink
-	CommitsCount int
-	Mirror       *models.Mirror
 }
 
 // IsOwner returns true if current user is the owner of repository.
@@ -211,15 +211,17 @@ func Contexter() macaron.Handler {
 		}
 
 		// Get user from session if logined.
-		ctx.User, ctx.IsBasicAuth = auth.SignedInUser(ctx.Req.Request, ctx.Session)
+		ctx.User, ctx.IsBasicAuth = auth.SignedInUser(ctx.Context, ctx.Session)
 
 		if ctx.User != nil {
 			ctx.IsSigned = true
 			ctx.Data["IsSigned"] = ctx.IsSigned
 			ctx.Data["SignedUser"] = ctx.User
+			ctx.Data["SignedUserID"] = ctx.User.Id
 			ctx.Data["SignedUserName"] = ctx.User.Name
 			ctx.Data["IsAdmin"] = ctx.User.IsAdmin
 		} else {
+			ctx.Data["SignedUserID"] = 0
 			ctx.Data["SignedUserName"] = ""
 		}
 

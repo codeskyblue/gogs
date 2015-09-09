@@ -113,16 +113,20 @@ func Http(ctx *middleware.Context) {
 			}
 
 			// Assume username now is a token.
-			token, err := models.GetAccessTokenBySha(authUsername)
+			token, err := models.GetAccessTokenBySHA(authUsername)
 			if err != nil {
-				if err == models.ErrAccessTokenNotExist {
+				if models.IsErrAccessTokenNotExist(err) {
 					ctx.HandleText(401, "invalid token")
 				} else {
 					ctx.Handle(500, "GetAccessTokenBySha", err)
 				}
 				return
 			}
-			authUser, err = models.GetUserByID(token.Uid)
+			token.Updated = time.Now()
+			if err = models.UpdateAccessToekn(token); err != nil {
+				ctx.Handle(500, "UpdateAccessToekn", err)
+			}
+			authUser, err = models.GetUserByID(token.UID)
 			if err != nil {
 				ctx.Handle(500, "GetUserById", err)
 				return
@@ -292,6 +296,7 @@ func serviceReceivePack(hr handler) {
 
 func serviceRpc(rpc string, hr handler) {
 	w, r, dir := hr.w, hr.r, hr.Dir
+	defer r.Body.Close()
 
 	if !hasAccess(r, hr.Config, dir, rpc, true) {
 		renderNoAccess(w)

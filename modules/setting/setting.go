@@ -24,6 +24,7 @@ import (
 	"github.com/gogits/gogs/modules/bindata"
 	"github.com/gogits/gogs/modules/log"
 	// "github.com/gogits/gogs/modules/ssh"
+	"github.com/gogits/gogs/modules/user"
 )
 
 type Scheme string
@@ -80,6 +81,8 @@ var (
 		QueueLength    int
 		DeliverTimeout int
 		SkipTLSVerify  bool
+		Types          []string
+		PagingNum      int
 	}
 
 	// Repository settings.
@@ -88,7 +91,13 @@ var (
 	AnsiCharset  string
 
 	// UI settings.
-	IssuePagingNum int
+	ExplorePagingNum int
+	IssuePagingNum   int
+
+	// Markdown sttings.
+	Markdown struct {
+		EnableHardLineBreak bool
+	}
 
 	// Picture settings.
 	PictureService   string
@@ -126,11 +135,26 @@ var (
 	Git struct {
 		MaxGitDiffLines int
 		GcArgs          []string `delim:" "`
-		Fsck            struct {
-			Enable   bool
-			Interval int
-			Args     []string `delim:" "`
-		} `ini:"git.fsck"`
+	}
+
+	// Cron tasks.
+	Cron struct {
+		UpdateMirror struct {
+			Enabled    bool
+			RunAtStart bool
+			Schedule   string
+		} `ini:"cron.update_mirrors"`
+		RepoHealthCheck struct {
+			Enabled    bool
+			RunAtStart bool
+			Schedule   string
+			Args       []string `delim:" "`
+		} `ini:"cron.repo_health_check"`
+		CheckRepoStats struct {
+			Enabled    bool
+			RunAtStart bool
+			Schedule   string
+		} `ini:"cron.check_repo_stats"`
 	}
 
 	// I18n settings.
@@ -177,6 +201,11 @@ func ExecPath() (string, error) {
 
 // WorkDir returns absolute path of work directory.
 func WorkDir() (string, error) {
+	wd := os.Getenv("GOGS_WORK_DIR")
+	if len(wd) > 0 {
+		return wd, nil
+	}
+
 	execPath, err := ExecPath()
 	if err != nil {
 		return execPath, err
@@ -286,7 +315,7 @@ func NewConfigContext() {
 		AttachmentPath = path.Join(workDir, AttachmentPath)
 	}
 	AttachmentAllowedTypes = strings.Replace(sec.Key("ALLOWED_TYPES").MustString("image/jpeg,image/png"), "|", ",", -1)
-	AttachmentMaxSize = sec.Key("MAX_SIZE").MustInt64(32)
+	AttachmentMaxSize = sec.Key("MAX_SIZE").MustInt64(4)
 	AttachmentMaxFiles = sec.Key("MAX_FILES").MustInt(5)
 	AttachmentEnabled = sec.Key("ENABLE").MustBool(true)
 
@@ -309,10 +338,7 @@ func NewConfigContext() {
 	}[Cfg.Section("time").Key("FORMAT").MustString("RFC1123")]
 
 	RunUser = Cfg.Section("").Key("RUN_USER").String()
-	curUser := os.Getenv("USER")
-	if len(curUser) == 0 {
-		curUser = os.Getenv("USERNAME")
-	}
+	curUser := user.CurrentUsername()
 	// Does not check run user when the install lock is off.
 	if InstallLock && RunUser != curUser {
 		log.Fatal(4, "Expect user(%s) but current user is: %s", RunUser, curUser)
@@ -337,7 +363,9 @@ func NewConfigContext() {
 	AnsiCharset = sec.Key("ANSI_CHARSET").MustString("")
 
 	// UI settings.
-	IssuePagingNum = Cfg.Section("ui").Key("ISSUE_PAGING_NUM").MustInt(10)
+	sec = Cfg.Section("ui")
+	ExplorePagingNum = sec.Key("EXPLORE_PAGING_NUM").MustInt(20)
+	IssuePagingNum = sec.Key("ISSUE_PAGING_NUM").MustInt(10)
 
 	sec = Cfg.Section("picture")
 	PictureService = sec.Key("SERVICE").In("server", []string{"server"})
@@ -359,8 +387,12 @@ func NewConfigContext() {
 		DisableGravatar = true
 	}
 
-	if err = Cfg.Section("git").MapTo(&Git); err != nil {
+	if err = Cfg.Section("markdown").MapTo(&Markdown); err != nil {
+		log.Fatal(4, "Fail to map Markdown settings: %v", err)
+	} else if err = Cfg.Section("git").MapTo(&Git); err != nil {
 		log.Fatal(4, "Fail to map Git settings: %v", err)
+	} else if Cfg.Section("cron").MapTo(&Cron); err != nil {
+		log.Fatal(4, "Fail to map Cron settings: %v", err)
 	}
 
 	Langs = Cfg.Section("i18n").Key("LANGS").Strings(",")
@@ -584,6 +616,8 @@ func newWebhookService() {
 	Webhook.QueueLength = sec.Key("QUEUE_LENGTH").MustInt(1000)
 	Webhook.DeliverTimeout = sec.Key("DELIVER_TIMEOUT").MustInt(5)
 	Webhook.SkipTLSVerify = sec.Key("SKIP_TLS_VERIFY").MustBool()
+	Webhook.Types = []string{"gogs", "slack"}
+	Webhook.PagingNum = sec.Key("PAGING_NUM").MustInt(10)
 }
 
 func NewServices() {

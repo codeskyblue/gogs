@@ -7,10 +7,13 @@ package models
 import (
 	"database/sql"
 	"fmt"
+	"net/url"
 	"os"
 	"path"
 	"strings"
+	"time"
 
+	"github.com/Unknwon/com"
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/go-xorm/core"
 	"github.com/go-xorm/xorm"
@@ -40,6 +43,25 @@ func sessionRelease(sess *xorm.Session) {
 	sess.Close()
 }
 
+// Note: get back time.Time from database Go sees it at UTC where they are really Local.
+// 	So this function makes correct timezone offset.
+func regulateTimeZone(t time.Time) time.Time {
+	if setting.UseSQLite3 {
+		return t
+	}
+
+	zone := t.Local().Format("-0700")
+	if len(zone) != 5 {
+		return t
+	}
+	offset := com.StrTo(zone[2:3]).MustInt()
+
+	if zone[0] == '-' {
+		return t.Add(time.Duration(offset) * time.Hour)
+	}
+	return t.Add(-1 * time.Duration(offset) * time.Hour)
+}
+
 var (
 	x         *xorm.Engine
 	tables    []interface{}
@@ -50,6 +72,7 @@ var (
 	}
 
 	EnableSQLite3 bool
+	EnableTidb    bool
 )
 
 func init() {
@@ -57,12 +80,17 @@ func init() {
 		new(User), new(PublicKey), new(Oauth2), new(AccessToken),
 		new(Repository), new(DeployKey), new(Collaboration), new(Access),
 		new(Watch), new(Star), new(Follow), new(Action),
-		new(Issue), new(Comment), new(Attachment), new(IssueUser),
+		new(Issue), new(PullRequest), new(Comment), new(Attachment), new(IssueUser),
 		new(Label), new(IssueLabel), new(Milestone),
 		new(Mirror), new(Release), new(LoginSource), new(Webhook),
 		new(UpdateTask), new(HookTask),
 		new(Team), new(OrgUser), new(TeamUser), new(TeamRepo),
 		new(Notice), new(EmailAddress))
+
+	gonicNames := []string{"SSL"}
+	for _, name := range gonicNames {
+		core.LintGonicMapper[name] = true
+	}
 }
 
 func LoadModelsConfig() {
@@ -107,13 +135,23 @@ func getEngine() (*xorm.Engine, error) {
 			port = fields[1]
 		}
 		cnnstr = fmt.Sprintf("postgres://%s:%s@%s:%s/%s?sslmode=%s",
-			DbCfg.User, DbCfg.Passwd, host, port, DbCfg.Name, DbCfg.SSLMode)
+			url.QueryEscape(DbCfg.User), url.QueryEscape(DbCfg.Passwd), host, port, DbCfg.Name, DbCfg.SSLMode)
 	case "sqlite3":
 		if !EnableSQLite3 {
 			return nil, fmt.Errorf("Unknown database type: %s", DbCfg.Type)
 		}
-		os.MkdirAll(path.Dir(DbCfg.Path), os.ModePerm)
+		if err := os.MkdirAll(path.Dir(DbCfg.Path), os.ModePerm); err != nil {
+			return nil, fmt.Errorf("Fail to create directories: %v", err)
+		}
 		cnnstr = "file:" + DbCfg.Path + "?cache=shared&mode=rwc"
+	case "tidb":
+		if !EnableTidb {
+			return nil, fmt.Errorf("Unknown database type: %s", DbCfg.Type)
+		}
+		if err := os.MkdirAll(path.Dir(DbCfg.Path), os.ModePerm); err != nil {
+			return nil, fmt.Errorf("Fail to create directories: %v", err)
+		}
+		cnnstr = "goleveldb://" + DbCfg.Path
 	default:
 		return nil, fmt.Errorf("Unknown database type: %s", DbCfg.Type)
 	}
@@ -127,7 +165,7 @@ func NewTestEngine(x *xorm.Engine) (err error) {
 	}
 
 	x.SetMapper(core.GonicMapper{})
-	return x.Sync(tables...)
+	return x.StoreEngine("InnoDB").Sync2(tables...)
 }
 
 func SetEngine() (err error) {

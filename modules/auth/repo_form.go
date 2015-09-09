@@ -17,13 +17,14 @@ import (
 //         \/        \/                   \/        \/                        \/       \/ \/
 
 type CreateRepoForm struct {
-	Uid         int64  `form:"uid" binding:"Required"`
-	RepoName    string `form:"repo_name" binding:"Required;AlphaDashDot;MaxSize(100)"`
-	Private     bool   `form:"private"`
-	Description string `form:"desc" binding:"MaxSize(255)"`
-	AutoInit    bool   `form:"auto_init"`
-	Gitignore   string `form:"gitignore"`
-	License     string `form:"license"`
+	Uid         int64  `binding:"Required"`
+	RepoName    string `binding:"Required;AlphaDashDot;MaxSize(100)"`
+	Private     bool
+	Description string `binding:"MaxSize(255)"`
+	AutoInit    bool
+	Gitignores  string
+	License     string
+	Readme      string
 }
 
 func (f *CreateRepoForm) Validate(ctx *macaron.Context, errs binding.Errors) binding.Errors {
@@ -31,14 +32,14 @@ func (f *CreateRepoForm) Validate(ctx *macaron.Context, errs binding.Errors) bin
 }
 
 type MigrateRepoForm struct {
-	CloneAddr    string `binding:"Required"`
-	AuthUsername string
-	AuthPassword string
-	Uid          int64  `binding:"Required"`
-	RepoName     string `binding:"Required;AlphaDashDot;MaxSize(100)"`
-	Mirror       bool
-	Private      bool
-	Description  string `binding:"MaxSize(255)"`
+	CloneAddr    string `json:"clone_addr" binding:"Required"`
+	AuthUsername string `json:"auth_username"`
+	AuthPassword string `json:"auth_password"`
+	Uid          int64  `json:"uid" binding:"Required"`
+	RepoName     string `json:"repo_name" binding:"Required;AlphaDashDot;MaxSize(100)"`
+	Private      bool   `json:"mirror"`
+	Mirror       bool   `json:"private"`
+	Description  string `json:"description" binding:"MaxSize(255)"`
 }
 
 func (f *MigrateRepoForm) Validate(ctx *macaron.Context, errs binding.Errors) binding.Errors {
@@ -46,12 +47,12 @@ func (f *MigrateRepoForm) Validate(ctx *macaron.Context, errs binding.Errors) bi
 }
 
 type RepoSettingForm struct {
-	RepoName    string `form:"repo_name" binding:"Required;AlphaDashDot;MaxSize(100)"`
-	Description string `form:"desc" binding:"MaxSize(255)"`
-	Website     string `form:"site" binding:"Url;MaxSize(100)"`
-	Branch      string `form:"branch"`
-	Interval    int    `form:"interval"`
-	Private     bool   `form:"private"`
+	RepoName    string `binding:"Required;AlphaDashDot;MaxSize(100)"`
+	Description string `binding:"MaxSize(255)"`
+	Website     string `binding:"Url;MaxSize(100)"`
+	Branch      string
+	Interval    int
+	Private     bool
 }
 
 func (f *RepoSettingForm) Validate(ctx *macaron.Context, errs binding.Errors) binding.Errors {
@@ -65,13 +66,30 @@ func (f *RepoSettingForm) Validate(ctx *macaron.Context, errs binding.Errors) bi
 //   \__/\  /  \___  >___  /___|  /___|  /\____/|__|_ \
 //        \/       \/    \/     \/     \/            \/
 
+type WebhookForm struct {
+	Events string
+	Create bool
+	Push   bool
+	Active bool
+}
+
+func (f WebhookForm) PushOnly() bool {
+	return f.Events == "push_only"
+}
+
+func (f WebhookForm) SendEverything() bool {
+	return f.Events == "send_everything"
+}
+
+func (f WebhookForm) ChooseEvents() bool {
+	return f.Events == "choose_events"
+}
+
 type NewWebhookForm struct {
-	HookTaskType string `form:"hook_type" binding:"Required"`
-	PayloadUrl   string `form:"payload_url" binding:"Required;Url"`
-	ContentType  string `form:"content_type" binding:"Required"`
-	Secret       string `form:"secret"`
-	PushOnly     bool   `form:"push_only"`
-	Active       bool   `form:"active"`
+	PayloadURL  string `binding:"Required;Url"`
+	ContentType int    `binding:"Required"`
+	Secret      string
+	WebhookForm
 }
 
 func (f *NewWebhookForm) Validate(ctx *macaron.Context, errs binding.Errors) binding.Errors {
@@ -79,11 +97,12 @@ func (f *NewWebhookForm) Validate(ctx *macaron.Context, errs binding.Errors) bin
 }
 
 type NewSlackHookForm struct {
-	HookTaskType string `form:"hook_type" binding:"Required"`
-	PayloadUrl   string `form:"payload_url" binding:"Required`
-	Channel      string `form:"channel" binding:"Required"`
-	PushOnly     bool   `form:"push_only"`
-	Active       bool   `form:"active"`
+	PayloadURL string `binding:"Required;Url`
+	Channel    string `binding:"Required"`
+	Username   string
+	IconURL    string
+	Color      string
+	WebhookForm
 }
 
 func (f *NewSlackHookForm) Validate(ctx *macaron.Context, errs binding.Errors) binding.Errors {

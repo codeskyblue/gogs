@@ -18,14 +18,15 @@ import (
 	"gopkg.in/ini.v1"
 
 	"github.com/gogits/gogs/models"
+	"github.com/gogits/gogs/models/cron"
 	"github.com/gogits/gogs/modules/auth"
 	"github.com/gogits/gogs/modules/base"
-	"github.com/gogits/gogs/modules/cron"
 	"github.com/gogits/gogs/modules/log"
 	"github.com/gogits/gogs/modules/mailer"
 	"github.com/gogits/gogs/modules/middleware"
 	"github.com/gogits/gogs/modules/setting"
 	"github.com/gogits/gogs/modules/social"
+	"github.com/gogits/gogs/modules/user"
 )
 
 const (
@@ -38,8 +39,6 @@ func checkRunMode() {
 		macaron.Env = macaron.PROD
 		macaron.ColorLog = false
 		setting.ProdMode = true
-	case "test":
-		macaron.Env = macaron.TEST
 	}
 	log.Info("Run Mode: %s", strings.Title(macaron.Env))
 }
@@ -86,7 +85,14 @@ func InstallInit(ctx *middleware.Context) {
 	ctx.Data["Title"] = ctx.Tr("install.install")
 	ctx.Data["PageIsInstall"] = true
 
-	ctx.Data["DbOptions"] = []string{"MySQL", "PostgreSQL", "SQLite3"}
+	dbOpts := []string{"MySQL", "PostgreSQL"}
+	if models.EnableSQLite3 {
+		dbOpts = append(dbOpts, "SQLite3")
+	}
+	if models.EnableTidb {
+		dbOpts = append(dbOpts, "TiDB")
+	}
+	ctx.Data["DbOptions"] = dbOpts
 }
 
 func Install(ctx *middleware.Context) {
@@ -111,15 +117,13 @@ func Install(ctx *middleware.Context) {
 	// Note(unknwon): it's hard for Windows users change a running user,
 	// 	so just use current one if config says default.
 	if setting.IsWindows && setting.RunUser == "git" {
-		form.RunUser = os.Getenv("USER")
-		if len(form.RunUser) == 0 {
-			form.RunUser = os.Getenv("USERNAME")
-		}
+		form.RunUser = user.CurrentUsername()
 	} else {
 		form.RunUser = setting.RunUser
 	}
 
 	form.Domain = setting.Domain
+	form.SSHPort = setting.SSHPort
 	form.HTTPPort = setting.HttpPort
 	form.AppUrl = setting.AppUrl
 
@@ -134,6 +138,7 @@ func Install(ctx *middleware.Context) {
 
 	// Server and other services settings
 	form.OfflineMode = setting.OfflineMode
+	form.DisableGravatar = setting.DisableGravatar
 	form.DisableRegistration = setting.Service.DisableRegistration
 	form.RequireSignInView = setting.Service.RequireSignInView
 
@@ -165,7 +170,7 @@ func InstallPost(ctx *middleware.Context, form auth.InstallForm) {
 
 	// Pass basic check, now test configuration.
 	// Test database setting.
-	dbTypes := map[string]string{"MySQL": "mysql", "PostgreSQL": "postgres", "SQLite3": "sqlite3"}
+	dbTypes := map[string]string{"MySQL": "mysql", "PostgreSQL": "postgres", "SQLite3": "sqlite3", "TiDB": "tidb"}
 	models.DbCfg.Type = dbTypes[form.DbType]
 	models.DbCfg.Host = form.DbHost
 	models.DbCfg.User = form.DbUser
@@ -201,10 +206,7 @@ func InstallPost(ctx *middleware.Context, form auth.InstallForm) {
 	}
 
 	// Check run user.
-	curUser := os.Getenv("USER")
-	if len(curUser) == 0 {
-		curUser = os.Getenv("USERNAME")
-	}
+	curUser := user.CurrentUsername()
 	if form.RunUser != curUser {
 		ctx.Data["Err_RunUser"] = true
 		ctx.RenderWithErr(ctx.Tr("install.run_user_not_match", form.RunUser, curUser), INSTALL, &form)
@@ -246,6 +248,13 @@ func InstallPost(ctx *middleware.Context, form auth.InstallForm) {
 	cfg.Section("server").Key("HTTP_PORT").SetValue(form.HTTPPort)
 	cfg.Section("server").Key("ROOT_URL").SetValue(form.AppUrl)
 
+	if form.SSHPort == 0 {
+		cfg.Section("server").Key("DISABLE_SSH").SetValue("true")
+	} else {
+		cfg.Section("server").Key("DISABLE_SSH").SetValue("false")
+		cfg.Section("server").Key("SSH_PORT").SetValue(com.ToStr(form.SSHPort))
+	}
+
 	if len(strings.TrimSpace(form.SMTPHost)) > 0 {
 		cfg.Section("mailer").Key("ENABLED").SetValue("true")
 		cfg.Section("mailer").Key("HOST").SetValue(form.SMTPHost)
@@ -259,6 +268,7 @@ func InstallPost(ctx *middleware.Context, form auth.InstallForm) {
 	cfg.Section("service").Key("ENABLE_NOTIFY_MAIL").SetValue(com.ToStr(form.MailNotify))
 
 	cfg.Section("server").Key("OFFLINE_MODE").SetValue(com.ToStr(form.OfflineMode))
+	cfg.Section("picture").Key("DISABLE_GRAVATAR").SetValue(com.ToStr(form.DisableGravatar))
 	cfg.Section("service").Key("DISABLE_REGISTRATION").SetValue(com.ToStr(form.DisableRegistration))
 	cfg.Section("service").Key("REQUIRE_SIGNIN_VIEW").SetValue(com.ToStr(form.RequireSignInView))
 

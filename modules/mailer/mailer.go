@@ -17,10 +17,38 @@ import (
 	"github.com/gogits/gogs/modules/setting"
 )
 
+type loginAuth struct {
+	username, password string
+}
+
+// SMTP AUTH LOGIN Auth Handler
+func LoginAuth(username, password string) smtp.Auth {
+	return &loginAuth{username, password}
+}
+
+func (a *loginAuth) Start(server *smtp.ServerInfo) (string, []byte, error) {
+	return "LOGIN", []byte{}, nil
+}
+
+func (a *loginAuth) Next(fromServer []byte, more bool) ([]byte, error) {
+	if more {
+		switch string(fromServer) {
+		case "Username:":
+			return []byte(a.username), nil
+		case "Password:":
+			return []byte(a.password), nil
+		default:
+			return nil, fmt.Errorf("unknwon fromServer: %s", string(fromServer))
+		}
+	}
+	return nil, nil
+}
+
 type Message struct {
 	To      []string
 	From    string
 	Subject string
+	ReplyTo string
 	Body    string
 	Type    string
 	Massive bool
@@ -36,7 +64,7 @@ func (m Message) Content() string {
 	}
 
 	// create mail content
-	content := "From: " + m.From + "\r\nSubject: " + m.Subject + "\r\nContent-Type: " + contentType + "\r\n\r\n" + m.Body
+	content := "From: " + m.From + "\r\nReply-To: " + m.ReplyTo + "\r\nSubject: " + m.Subject + "\r\nContent-Type: " + contentType + "\r\n\r\n" + m.Body
 	return content
 }
 
@@ -135,6 +163,9 @@ func sendMail(settings *setting.Mailer, recipients []string, msgContent []byte) 
 			auth = smtp.CRAMMD5Auth(settings.User, settings.Passwd)
 		} else if strings.Contains(options, "PLAIN") {
 			auth = smtp.PlainAuth("", settings.User, settings.Passwd, host)
+		} else if strings.Contains(options, "LOGIN") {
+			// Patch for AUTH LOGIN
+			auth = LoginAuth(settings.User, settings.Passwd)
 		}
 
 		if auth != nil {
@@ -222,7 +253,8 @@ func SendAsync(msg *Message) {
 func NewHtmlMessage(To []string, From, Subject, Body string) Message {
 	return Message{
 		To:      To,
-		From:    From,
+		From:    setting.MailService.From,
+		ReplyTo: From,
 		Subject: Subject,
 		Body:    Body,
 		Type:    "html",

@@ -9,8 +9,6 @@
         {{template "base/alert" .}}
 
 			  <form class="ui form" action="{{AppSubUrl}}/install" method="post">
-			  	{{.CsrfTokenHtml}}
-
 			  	<!-- Dtabase Settings -->
 			  	<h4 class="ui dividing header">{{.i18n.Tr "install.db_title"}}</h4>
 			  	<p>{{.i18n.Tr "install.requite_db_desc"}}</p>
@@ -18,7 +16,7 @@
 	  	      <label>{{.i18n.Tr "install.db_type"}}</label>
 			      <div class="ui selection database type dropdown">
 			        <input type="hidden" id="db_type" name="db_type" value="{{.CurDbOption}}">
-			        <div class="default text">{{.CurDbOption}}</div>
+			        <div class="text">{{.CurDbOption}}</div>
 			        <i class="dropdown icon"></i>
 			        <div class="menu">
                 {{range .DbOptions}}
@@ -28,7 +26,7 @@
 			      </div>
 	  	    </div>
 
-          <div id="sql_settings" class="{{if eq .CurDbOption "SQLite3"}}hide{{end}}">
+          <div id="sql_settings" class="{{if or (eq .CurDbOption "SQLite3") (eq .CurDbOption "TiDB")}}hide{{end}}">
             <div class="inline required field {{if .Err_DbSetting}}error{{end}}">
               <label for="db_host">{{.i18n.Tr "install.host"}}</label>
               <input id="db_host" name="db_host" value="{{.db_host}}">
@@ -64,8 +62,8 @@
             </div>
           </div>
 
-          <div id="sqlite_settings" class="{{if not (eq .CurDbOption "SQLite3")}}hide{{end}}">
-            <div class="inline required field {{if .Err_DbPath}}error{{end}}">
+          <div id="sqlite_settings" class="{{if not (or (eq .CurDbOption "SQLite3") (eq .CurDbOption "TiDB"))}}hide{{end}}">
+            <div class="inline required field {{if or .Err_DbPath .Err_DbSetting}}error{{end}}">
               <label for="db_path">{{.i18n.Tr "install.path"}}</label>
               <input id="db_path" name="db_path" value="{{.db_path}}">
               <span class="help">{{.i18n.Tr "install.sqlite_helper"}}</span>
@@ -91,8 +89,13 @@
           </div>
           <div class="inline required field">
             <label for="domain">{{.i18n.Tr "install.domain"}}</label>
-            <input id="domain" name="domain" value="{{.domain}}" required>
+            <input id="domain" name="domain" value="{{.domain}}" placeholder="e.g. try.gogs.io" required>
             <span class="help">{{.i18n.Tr "install.domain_helper"}}</span>
+          </div>
+          <div class="inline required field">
+            <label for="ssh_port">{{.i18n.Tr "install.ssh_port"}}</label>
+            <input id="ssh_port" name="ssh_port" value="{{.ssh_port}}">
+            <span class="help">{{.i18n.Tr "install.ssh_port_helper"}}</span>
           </div>
           <div class="inline required field">
             <label for="http_port">{{.i18n.Tr "install.http_port"}}</label>
@@ -101,12 +104,14 @@
           </div>
           <div class="inline required field">
             <label for="app_url">{{.i18n.Tr "install.app_url"}}</label>
-            <input id="app_url" name="app_url" value="{{.app_url}}" required>
+            <input id="app_url" name="app_url" value="{{.app_url}}" placeholder="e.g. https://try.gogs.io" required>
             <span class="help">{{.i18n.Tr "install.app_url_helper"}}</span>
           </div>
 
           <!-- Optional Settings -->
           <h4 class="ui dividing header">{{.i18n.Tr "install.optional_title"}}</h4>
+
+          <!-- Email -->
           <div class="ui accordion optional field">
             <div class="title {{if .Err_SMTP}}text red{{end}}">
               <i class="icon dropdown"></i>
@@ -145,6 +150,7 @@
             </div>
           </div>
 
+          <!-- Server and other services -->
           <div class="ui accordion optional field">
             <div class="title">
               <i class="icon dropdown"></i>
@@ -152,9 +158,15 @@
             </div>
             <div class="content">
               <div class="inline field">
-                <div class="ui checkbox">
+                <div class="ui checkbox" id="offline-mode">
                   <label class="poping up" data-content="{{.i18n.Tr "install.offline_mode_popup"}}"><strong>{{.i18n.Tr "install.offline_mode"}}</strong></label>
                   <input name="offline_mode" type="checkbox" {{if .offline_mode}}checked{{end}}>
+                </div>
+              </div>
+              <div class="inline field">
+                <div class="ui checkbox" id="disable-gravatar">
+                  <label class="poping up" data-content="{{.i18n.Tr "install.disable_gravatar_popup"}}"><strong>{{.i18n.Tr "install.disable_gravatar"}}</strong></label>
+                  <input name="disable_gravatar" type="checkbox" {{if .disable_gravatar}}checked{{end}}>
                 </div>
               </div>
               <div class="inline field">
@@ -172,6 +184,7 @@
             </div>
           </div>
 
+          <!-- Admin -->
           <div class="ui accordion optional field">
             <div class="title {{if .Err_Admin}}text red{{end}}">
               <i class="icon dropdown"></i>

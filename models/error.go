@@ -183,6 +183,26 @@ func (err ErrDeployKeyNameAlreadyUsed) Error() string {
 	return fmt.Sprintf("public key already exists: [repo_id: %d, name: %s]", err.RepoID, err.Name)
 }
 
+//    _____                                   ___________     __
+//   /  _  \   ____  ____  ____   ______ _____\__    ___/___ |  | __ ____   ____
+//  /  /_\  \_/ ___\/ ___\/ __ \ /  ___//  ___/ |    | /  _ \|  |/ // __ \ /    \
+// /    |    \  \__\  \__\  ___/ \___ \ \___ \  |    |(  <_> )    <\  ___/|   |  \
+// \____|__  /\___  >___  >___  >____  >____  > |____| \____/|__|_ \\___  >___|  /
+//         \/     \/    \/    \/     \/     \/                    \/    \/     \/
+
+type ErrAccessTokenNotExist struct {
+	SHA string
+}
+
+func IsErrAccessTokenNotExist(err error) bool {
+	_, ok := err.(ErrAccessTokenNotExist)
+	return ok
+}
+
+func (err ErrAccessTokenNotExist) Error() string {
+	return fmt.Sprintf("access token does not exist: [sha: %s]", err.SHA)
+}
+
 // ________                            .__                __  .__
 // \_____  \_______  _________    ____ |__|____________ _/  |_|__| ____   ____
 //  /   |   \_  __ \/ ___\__  \  /    \|  \___   /\__  \\   __\  |/  _ \ /    \
@@ -236,7 +256,27 @@ func IsErrRepoAlreadyExist(err error) bool {
 }
 
 func (err ErrRepoAlreadyExist) Error() string {
-	return fmt.Sprintf("repository already exists [uname: %d, name: %s]", err.Uname, err.Name)
+	return fmt.Sprintf("repository already exists [uname: %s, name: %s]", err.Uname, err.Name)
+}
+
+//  __      __      ___.   .__                   __
+// /  \    /  \ ____\_ |__ |  |__   ____   ____ |  | __
+// \   \/\/   // __ \| __ \|  |  \ /  _ \ /  _ \|  |/ /
+//  \        /\  ___/| \_\ \   Y  (  <_> |  <_> )    <
+//   \__/\  /  \___  >___  /___|  /\____/ \____/|__|_ \
+//        \/       \/    \/     \/                   \/
+
+type ErrWebhookNotExist struct {
+	ID int64
+}
+
+func IsErrWebhookNotExist(err error) bool {
+	_, ok := err.(ErrWebhookNotExist)
+	return ok
+}
+
+func (err ErrWebhookNotExist) Error() string {
+	return fmt.Sprintf("webhook does not exist [id: %d]", err.ID)
 }
 
 // .___
@@ -258,7 +298,53 @@ func IsErrIssueNotExist(err error) bool {
 }
 
 func (err ErrIssueNotExist) Error() string {
-	return fmt.Sprintf("issue does not exist [id: %d, repo_id: %d, index: %4]", err.ID, err.RepoID, err.Index)
+	return fmt.Sprintf("issue does not exist [id: %d, repo_id: %d, index: %d]", err.ID, err.RepoID, err.Index)
+}
+
+// __________      .__  .__ __________                                     __
+// \______   \__ __|  | |  |\______   \ ____  ________ __   ____   _______/  |_
+//  |     ___/  |  \  | |  | |       _// __ \/ ____/  |  \_/ __ \ /  ___/\   __\
+//  |    |   |  |  /  |_|  |_|    |   \  ___< <_|  |  |  /\  ___/ \___ \  |  |
+//  |____|   |____/|____/____/____|_  /\___  >__   |____/  \___  >____  > |__|
+//                                  \/     \/   |__|           \/     \/
+
+type ErrPullRequestNotExist struct {
+	ID         int64
+	PullID     int64
+	HeadRepoID int64
+	BaseRepoID int64
+	HeadBarcnh string
+	BaseBranch string
+}
+
+func IsErrPullRequestNotExist(err error) bool {
+	_, ok := err.(ErrPullRequestNotExist)
+	return ok
+}
+
+func (err ErrPullRequestNotExist) Error() string {
+	return fmt.Sprintf("pull request does not exist [id: %d, pull_id: %d, head_repo_id: %d, base_repo_id: %d, head_branch: %s, base_branch: %s]",
+		err.ID, err.PullID, err.HeadRepoID, err.BaseRepoID, err.HeadBarcnh, err.BaseBranch)
+}
+
+// _________                                       __
+// \_   ___ \  ____   _____   _____   ____   _____/  |_
+// /    \  \/ /  _ \ /     \ /     \_/ __ \ /    \   __\
+// \     \___(  <_> )  Y Y  \  Y Y  \  ___/|   |  \  |
+//  \______  /\____/|__|_|  /__|_|  /\___  >___|  /__|
+//         \/             \/      \/     \/     \/
+
+type ErrCommentNotExist struct {
+	ID int64
+}
+
+func IsErrCommentNotExist(err error) bool {
+	_, ok := err.(ErrCommentNotExist)
+	return ok
+}
+
+func (err ErrCommentNotExist) Error() string {
+	return fmt.Sprintf("comment does not exist [id: %d]", err.ID)
 }
 
 // .____          ___.          .__

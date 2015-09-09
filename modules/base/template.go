@@ -76,9 +76,8 @@ func ToUtf8WithErr(content []byte) (error, string) {
 	}
 
 	encoding, _ := charset.Lookup(charsetLabel)
-
 	if encoding == nil {
-		return fmt.Errorf("unknow char decoder %s", charsetLabel), string(content)
+		return fmt.Errorf("unknown char decoder %s", charsetLabel), string(content)
 	}
 
 	result, n, err := transform.String(encoding.NewDecoder(), string(content))
@@ -121,9 +120,6 @@ var TemplateFuncs template.FuncMap = map[string]interface{}{
 	},
 	"AppDomain": func() string {
 		return setting.Domain
-	},
-	"CdnMode": func() bool {
-		return setting.ProdMode && !setting.OfflineMode
 	},
 	"DisableGravatar": func() bool {
 		return setting.DisableGravatar
@@ -195,8 +191,12 @@ type Actioner interface {
 	GetActEmail() string
 	GetRepoUserName() string
 	GetRepoName() string
+	GetRepoPath() string
+	GetRepoLink() string
 	GetBranch() string
 	GetContent() string
+	GetCreate() time.Time
+	GetIssueInfos() []string
 }
 
 // ActionIcon accepts a int that represents action operation type
