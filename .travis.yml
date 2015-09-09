@@ -7,8 +7,7 @@ go:
   - 1.5
   - tip
 env:
-  - PATH=/home/travis/gopath/bin:$PATH
-  - GR_VERSION=1.4
+  - PATH=/home/travis/gopath/bin:$PATH GR_VERSION=1.4
 
 before_install:
   - sudo apt-get update -qq
