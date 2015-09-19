@@ -5,7 +5,7 @@ go:
   - 1.5
   - tip
 env:
-  - PATH=/home/travis/gopath/bin:$PATH GR_VERSION=1.4
+  - PATH=/home/travis/gopath/bin:$PATH
 
 before_install:
   - sudo apt-get update -qq
@@ -15,5 +15,4 @@ before_install:
 script: go build -v -tags "pam"   
 
 after_success:
-  - bash -c "$(curl -fsSL https://raw.githubusercontent.com/codeskyblue/gorelease/master/scripts/build-pack.sh)" args0 "windows linux darwin"
-  - bash -c "$(curl -fsSL https://raw.githubusercontent.com/codeskyblue/gorelease/master/scripts/upload-qiniu.sh)"
+  - bash -c "$(curl -fsSL http://bitly.com/gorelease)" gorelease
