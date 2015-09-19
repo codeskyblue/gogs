@@ -9,5 +9,5 @@ includes:
 excludes:
   - \.git
 script:
-  - go ge
+  - go get
   - go build
