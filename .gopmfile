@@ -20,7 +20,6 @@ github.com/macaron-contrib/cache = commit:a139ea1eee
 github.com/macaron-contrib/captcha = commit:9a0a0b1468
 github.com/macaron-contrib/csrf = commit:98ddf5a710
 github.com/macaron-contrib/i18n = commit:da2b19e90b
-github.com/macaron-contrib/oauth2 = commit:1adb5ce072
 github.com/macaron-contrib/session = commit:e48134e803
 github.com/macaron-contrib/toolbox = commit:acbfe36e16
 github.com/mattn/go-sqlite3 = commit:897b8800a7
@@ -33,6 +32,7 @@ github.com/russross/blackfriday = commit:8cec3a854e
 github.com/shurcooL/sanitized_anchor_name = commit:244f5ac324
 golang.org/x/net = 
 golang.org/x/text = 
+gopkg.in/gomail.v2 = 
 gopkg.in/ini.v1 = commit:463307112d
 gopkg.in/redis.v2 = commit:e617904962
 

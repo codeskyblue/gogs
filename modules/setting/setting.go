@@ -75,6 +75,7 @@ var (
 	UseSQLite3    bool
 	UseMySQL      bool
 	UsePostgreSQL bool
+	UseTiDB       bool
 
 	// Webhook settings.
 	Webhook struct {
@@ -91,8 +92,9 @@ var (
 	AnsiCharset  string
 
 	// UI settings.
-	ExplorePagingNum int
-	IssuePagingNum   int
+	ExplorePagingNum   int
+	IssuePagingNum     int
+	AdminUserPagingNum int
 
 	// Markdown sttings.
 	Markdown struct {
@@ -227,9 +229,9 @@ func forcePathSeparator(path string) {
 	}
 }
 
-// NewConfigContext initializes configuration context.
+// NewContext initializes configuration context.
 // NOTE: do not print any log except error.
-func NewConfigContext() {
+func NewContext() {
 	workDir, err := WorkDir()
 	if err != nil {
 		log.Fatal(4, "Fail to get work directory: %v", err)
@@ -367,6 +369,9 @@ func NewConfigContext() {
 	ExplorePagingNum = sec.Key("EXPLORE_PAGING_NUM").MustInt(20)
 	IssuePagingNum = sec.Key("ISSUE_PAGING_NUM").MustInt(10)
 
+	sec = Cfg.Section("ui.admin")
+	AdminUserPagingNum = sec.Key("USER_PAGING_NUM").MustInt(50)
+
 	sec = Cfg.Section("picture")
 	PictureService = sec.Key("SERVICE").In("server", []string{"server"})
 	AvatarUploadPath = sec.Key("AVATAR_UPLOAD_PATH").MustString("data/avatars")
@@ -416,6 +421,7 @@ var Service struct {
 	EnableReverseProxyAuth         bool
 	EnableReverseProxyAutoRegister bool
 	DisableMinimumKeySizeCheck     bool
+	EnableCaptcha                  bool
 }
 
 func newService() {
@@ -429,6 +435,7 @@ func newService() {
 	Service.EnableReverseProxyAuth = sec.Key("ENABLE_REVERSE_PROXY_AUTHENTICATION").MustBool()
 	Service.EnableReverseProxyAutoRegister = sec.Key("ENABLE_REVERSE_PROXY_AUTO_REGISTRATION").MustBool()
 	Service.DisableMinimumKeySizeCheck = sec.Key("DISABLE_MINIMUM_KEY_SIZE_CHECK").MustBool()
+	Service.EnableCaptcha = sec.Key("ENABLE_CAPTCHA").MustBool()
 }
 
 var logLevels = map[string]string{
@@ -538,6 +545,7 @@ func newSessionService() {
 
 // Mailer represents mail service.
 type Mailer struct {
+	QueueLength       int
 	Name              string
 	Host              string
 	From              string
@@ -562,8 +570,7 @@ type Oauther struct {
 }
 
 var (
-	MailService  *Mailer
-	OauthService *Oauther
+	MailService *Mailer
 )
 
 func newMailService() {
@@ -574,6 +581,7 @@ func newMailService() {
 	}
 
 	MailService = &Mailer{
+		QueueLength:    sec.Key("SEND_BUFFER_LEN").MustInt(100),
 		Name:           sec.Key("NAME").MustString(AppName),
 		Host:           sec.Key("HOST").String(),
 		User:           sec.Key("USER").String(),

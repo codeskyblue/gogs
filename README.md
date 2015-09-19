@@ -3,9 +3,9 @@ Gogs - Go Git Service [![Build Status](https://travis-ci.org/gogits/gogs.svg?bra
 
 [![Gitter](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/gogits/gogs?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
 
-Gogs (Go Git Service) is a painless self-hosted Git service.
+![](public/img/gogs-large-resize.png)
 
-##### Current version: 0.6.9 Beta
+##### Current version: 0.6.13 Beta
 
 <table>
     <tr>
@@ -61,8 +61,8 @@ The goal of this project is to make the easiest, fastest, and most painless way 
 - Gravatar and custom source support
 - Mail service
 - Administration panel
-- Supports MySQL, PostgreSQL and SQLite3
-- Social account login (GitHub, Google, QQ, Weibo)
+- CI integration: [Drone](https://github.com/drone/drone)
+- Supports MySQL, PostgreSQL, SQLite3 and [TiDB](https://github.com/pingcap/tidb)
 - Multi-language support ([14 languages](https://crowdin.com/project/gogs))
 
 ## System Requirements
@@ -98,6 +98,10 @@ There are 5 ways to install Gogs:
 ### Screencasts
 
 - [Instalando Gogs no Ubuntu](http://blog.linuxpro.com.br/2015/08/14/instalando-gogs-no-ubuntu/) (Português)
+
+### Deploy to Cloud
+
+- [OpenShift](https://github.com/tkisme/gogs-openshift)
 
 ## Acknowledgments
 
